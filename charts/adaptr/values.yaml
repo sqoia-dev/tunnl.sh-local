@@ -1,0 +1,152 @@
+# Default values for adaptr.
+# See charts/adaptr/README.md for full documentation.
+
+image:
+  repository: ghcr.io/sqoia-dev/adaptr
+  tag: "0.4.0"
+  # pullPolicy: IfNotPresent is appropriate for versioned tags.
+  # Use Always when tag is "latest" or a mutable tag like a branch SHA.
+  pullPolicy: IfNotPresent
+
+# imagePullSecrets is used to pull the image from a private registry.
+# Example:
+#   imagePullSecrets:
+#     - name: my-registry-secret
+imagePullSecrets: []
+
+# nameOverride overrides the chart name component of generated resource names.
+nameOverride: ""
+# fullnameOverride overrides the full generated resource name.
+fullnameOverride: ""
+
+config:
+  # target is the upstream address adaptr proxies to.
+  # Required unless sidecar.enabled is true (in which case the calling Pod spec
+  # must supply TARGET via env).
+  # Examples:
+  #   Standalone:  "127.0.0.1:3000"
+  #   Sidecar:     "localhost:3000"  (same Pod, different container)
+  target: ""
+
+  # basePath is the URL subpath prefix served externally.
+  # Must begin with "/" when set.  Leave empty to run at root.
+  # Example: "/myapp"
+  basePath: ""
+
+  # externalPort is the port adaptr listens on inside the container.
+  # Must match service.port (or the service.targetPort override if you set one).
+  externalPort: 8080
+
+  # rewriteHtml controls whether adaptr rewrites HTML, CSS, JS, and manifest
+  # responses to fix absolute asset paths for the subpath prefix.
+  # Set to false if your upstream already handles path rewriting.
+  rewriteHtml: true
+
+  # passthroughPaths is a comma-separated list of URL path prefixes that bypass
+  # HTML rewriting entirely.  Useful for API routes, health endpoints, or any
+  # path that returns non-SPA content at a known prefix.
+  # Example: "/api,/static"
+  passthroughPaths: ""
+
+  # maxRewriteBodyBytes is the maximum response body size (in bytes) that
+  # adaptr will buffer for rewriting.  Responses larger than this limit are
+  # streamed through unmodified.
+  # Default: 10 MiB.  Tune down for memory-constrained environments.
+  maxRewriteBodyBytes: 10485760
+
+  # Future: metrics endpoint
+  # adaptr currently serves one upstream target per instance.  Multi-instance
+  # observability (request counts, rewrite latency, error rates) will be exposed
+  # on /metrics (Prometheus text format) in a future release.  The /health
+  # endpoint is sufficient for liveness/readiness today.
+  metricsEnabled: false
+
+service:
+  type: ClusterIP
+  port: 8080
+  # targetPort overrides the container port the Service forwards to.
+  # Leave unset to use config.externalPort automatically.
+  targetPort: ""
+  # annotations applied to the Service resource.
+  annotations: {}
+
+ingress:
+  # enabled: false by default — enable only when adaptr is the edge entrypoint.
+  # When running as a sidecar, leave disabled; the parent Pod's Ingress handles
+  # external traffic.
+  enabled: false
+  className: ""
+  annotations: {}
+  #   nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #   - secretName: adaptr-tls
+  #     hosts:
+  #       - chart-example.local
+
+# resources sets container CPU and memory requests/limits.
+# These defaults are intentionally conservative for a lightweight proxy.
+# Tune based on observed traffic volume and response body sizes.
+resources:
+  limits:
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+# securityContext applied to the Pod.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65534   # nobody
+  runAsGroup: 65534
+  fsGroup: 65534
+
+# securityContext applied to the adaptr container.
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# sidecar mode: when true, this chart renders a container spec fragment
+# instead of a full Deployment.  Inject the rendered container into an
+# existing Deployment's spec.template.spec.containers list.
+# The Deployment, ServiceAccount, and Service are not created in sidecar mode.
+# The ConfigMap (if customRewrites.enabled) is still created so the sidecar
+# can mount it.
+sidecar:
+  enabled: false
+
+# serviceAccount controls the ServiceAccount created for adaptr.
+serviceAccount:
+  # create: true creates a dedicated ServiceAccount.
+  # Set to false to use the default ServiceAccount or supply an existing name.
+  create: true
+  name: ""
+  annotations: {}
+
+# replicaCount controls the number of adaptr Pod replicas.
+# Ignored in sidecar mode.
+replicaCount: 1
+
+# podAnnotations are added to the Pod template metadata.
+podAnnotations: {}
+
+# nodeSelector, tolerations, and affinity follow standard Kubernetes conventions.
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# customRewrites allows mounting additional rewrite rules via a ConfigMap.
+# The ConfigMap is mounted at /etc/adaptr/rewrites.conf inside the container.
+# This feature is reserved for a future release when adaptr supports an
+# external rules file.  Creating the ConfigMap today causes no harm.
+customRewrites:
+  enabled: false
+  # rules is a multiline string of rewrite directives (format TBD).
+  rules: ""

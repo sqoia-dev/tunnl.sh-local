@@ -1,0 +1,19 @@
+apiVersion: v2
+name: adaptr
+description: SPA Subpath Router — serve any SPA at any subpath without rebuilding
+type: application
+version: 0.4.0
+appVersion: "0.4.0"
+home: https://github.com/sqoia-dev/adaptr
+sources:
+  - https://github.com/sqoia-dev/adaptr
+maintainers:
+  - name: NessieCanCode
+    url: https://github.com/NessieCanCode
+keywords:
+  - spa
+  - subpath
+  - reverse-proxy
+  - path-rewriting
+  - open-ondemand
+  - kubernetes

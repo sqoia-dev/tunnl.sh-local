@@ -1,0 +1,106 @@
+{{- if not .Values.sidecar.enabled }}
+# Deployment is not created in sidecar mode (sidecar.enabled=true).
+# In sidecar mode, inject the container spec manually into your existing Deployment.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "adaptr.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "adaptr.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "adaptr.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "adaptr.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "adaptr.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: adaptr
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ include "adaptr.containerPort" . }}
+              protocol: TCP
+          env:
+            # TARGET is required — adaptr will exit on startup if unset.
+            - name: TARGET
+              value: {{ required "config.target is required when sidecar.enabled is false" .Values.config.target | quote }}
+            - name: EXTERNAL_PORT
+              value: {{ .Values.config.externalPort | quote }}
+            {{- if .Values.config.basePath }}
+            - name: BASE_PATH
+              value: {{ .Values.config.basePath | quote }}
+            {{- end }}
+            - name: REWRITE_HTML
+              value: {{ .Values.config.rewriteHtml | quote }}
+            {{- if .Values.config.passthroughPaths }}
+            - name: PASSTHROUGH_PATHS
+              value: {{ .Values.config.passthroughPaths | quote }}
+            {{- end }}
+            - name: MAX_REWRITE_BODY_BYTES
+              value: {{ .Values.config.maxRewriteBodyBytes | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            # Allow up to 30s for the upstream to become available before
+            # liveness kicks in.  A dead upstream does not kill adaptr itself,
+            # but a crashed adaptr should restart promptly.
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            # Readiness gate: do not send traffic until adaptr responds on /health.
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.customRewrites.enabled }}
+          volumeMounts:
+            - name: rewrite-rules
+              mountPath: /etc/adaptr
+              readOnly: true
+          {{- end }}
+      {{- if .Values.customRewrites.enabled }}
+      volumes:
+        - name: rewrite-rules
+          configMap:
+            name: {{ include "adaptr.fullname" . }}-rewrites
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

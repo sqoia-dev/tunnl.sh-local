@@ -1,0 +1,17 @@
+{{- if .Values.customRewrites.enabled }}
+# ConfigMap for custom rewrite rules.
+# This is a forward-compatibility hook: adaptr does not yet consume an external
+# rules file, but the ConfigMap will be mounted when the feature ships.
+# Enable only when customRewrites.rules is non-empty and you are testing a
+# pre-release build that supports the /etc/adaptr/rewrites.conf format.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "adaptr.fullname" . }}-rewrites
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "adaptr.labels" . | nindent 4 }}
+data:
+  rewrites.conf: |
+    {{- .Values.customRewrites.rules | nindent 4 }}
+{{- end }}

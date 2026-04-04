@@ -1,0 +1,72 @@
+adaptr {{ .Chart.AppVersion }} has been deployed.
+
+{{- if .Values.sidecar.enabled }}
+
+SIDECAR MODE
+------------
+No Deployment or Service was created. Inject the adaptr container spec into
+your existing Deployment's spec.template.spec.containers list.
+
+Container image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+Listen port:     {{ include "adaptr.containerPort" . }}
+
+Required environment variable in your Deployment:
+  TARGET=<upstream-address>   (e.g., localhost:3000)
+
+Optional:
+  BASE_PATH=<subpath>         (e.g., /myapp)
+  PASSTHROUGH_PATHS=<prefix>  (e.g., /api,/healthz)
+
+{{- else }}
+
+STANDALONE MODE
+---------------
+adaptr is running as a standalone Deployment in namespace {{ .Release.Namespace }}.
+
+  Release:   {{ .Release.Name }}
+  Image:     {{ .Values.image.repository }}:{{ .Values.image.tag }}
+  Target:    {{ .Values.config.target }}
+  Base path: {{ if .Values.config.basePath }}{{ .Values.config.basePath }}{{ else }}(none — serving at root){{ end }}
+
+ACCESS
+------
+{{- if .Values.ingress.enabled }}
+  Ingress is enabled. Access adaptr via your configured host:
+  {{- range .Values.ingress.hosts }}
+    http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}{{ (index .paths 0).path }}
+  {{- end }}
+{{- else }}
+  Ingress is disabled. Forward a local port to verify the deployment:
+
+    kubectl port-forward \
+      svc/{{ include "adaptr.fullname" . }} \
+      {{ .Values.service.port }}:{{ .Values.service.port }} \
+      -n {{ .Release.Namespace }}
+
+  Then open: http://localhost:{{ .Values.service.port }}{{ .Values.config.basePath }}
+{{- end }}
+
+HEALTH CHECK
+------------
+  kubectl exec -n {{ .Release.Namespace }} \
+    deploy/{{ include "adaptr.fullname" . }} -- \
+    wget -qO- http://localhost:{{ include "adaptr.containerPort" . }}/health
+
+  A healthy response returns: {"status":"ok"}
+
+LOGS
+----
+  kubectl logs -n {{ .Release.Namespace }} \
+    deploy/{{ include "adaptr.fullname" . }} --follow
+
+{{- end }}
+
+UPGRADE
+-------
+  helm upgrade {{ .Release.Name }} adaptr/adaptr \
+    --set image.tag=<new-version> \
+    -n {{ .Release.Namespace }}
+
+UNINSTALL
+---------
+  helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}

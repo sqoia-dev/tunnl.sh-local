@@ -1,0 +1,7 @@
+# Build outputs — anchored to repo root so charts/adaptr/ is not excluded
+/adaptr
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+/tunnl-local
