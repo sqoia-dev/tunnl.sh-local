@@ -1,0 +1,6 @@
+# Build outputs
+resolvr
+
+# OS artifacts
+.DS_Store
+Thumbs.db
